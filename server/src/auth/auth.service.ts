@@ -7,8 +7,11 @@ import { EmailService } from './email/email.service';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyResetOtpDto } from './dto/verify-reset-otp.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ResetPassworddDto } from './dto/reset-passwordd.dto';
 
 
 @Injectable()
@@ -578,62 +581,299 @@ async refreshToken(refreshToken: string) {
     }
 
     //Forgot password
-    async forgotPassword(dto: ForgotPasswordDto) {
-        const email = dto.email.trim().toLocaleLowerCase();
+    // Forgot password
+async forgotPassword(dto: ForgotPasswordDto) {
+  const email = dto.email.trim().toLowerCase();
 
-        const user = await this.prisma.user.findUnique({
-            where: {
-                email
-            }
-        });
+  // Find user
+  const user = await this.prisma.user.findUnique({
+    where: {
+      email,
+    },
+  });
 
-        //dont reveal whether the email exists
-        if(!user) {
-            return {
-                success: true,
-                message: "If the email is registered, a password reset OTP has been sent."
-            }
-        }
+  // Don't reveal whether email exists
+  if (!user) {
+    return {
+      success: true,
+      message:
+        'If the email is registered, a password reset OTP has been sent.',
+    };
+  }
 
-        if(!user.isActive) {
-            throw new BadGatewayException("If the email is registered, a password reset OTP has been sent.")
-        }
+  // Check account status
+  if (!user.isActive) {
+    return {
+      success: true,
+      message:
+        'If the email is registered, a password reset OTP has been sent.',
+    };
+  }
 
-        //remove old unused reset tokens
-        await this.prisma.passwordResetToken.deleteMany({
-            where: {
-                userId: user.id,
-                used: false
-            }
-        });
+  // Remove previous unused reset OTPs
+  await this.prisma.passwordResetToken.deleteMany({
+    where: {
+      userId: user.id,
+      used: false,
+    },
+  });
 
-        //generate OTP
-        const otp = generateOtp();
+  // Generate 6-digit OTP
+  const otp = generateOtp();
 
-        //hash OTP
-        const tokenHash = hashOtp(otp);
+  // Hash OTP using your existing SHA-256 function
+  const tokenHash = hashOtp(otp);
 
-        //OTP expires in 10 min
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  // OTP expires after 10 minutes
+  const expiresAt = new Date(
+    Date.now() + 10 * 60 * 1000,
+  );
 
-        //store OTP
-        await this.prisma.passwordResetToken.create({
-            data: {
-                userId: user.id,
-                tokenHash,
-                expiresAt
-            }
-        });
+  // Store OTP hash
+  await this.prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+      attempts: 0,
+      used: false,
+    },
+  });
 
-        await this.emailService.sendPasswordResetEmail(
-        user.email,
-        user.firstName,
-        otp,
-        );
+  // Send OTP to email
+  await this.emailService.sendPasswordResetEmail(
+    user.email,
+    user.firstName,
+    otp,
+  );
 
-        return {
-        success: true,
-        message: 'If the email is registered, a password reset OTP has been sent.',
-        };
-    }
+  return {
+    success: true,
+    message:
+      'If the email is registered, a password reset OTP has been sent.',
+  };
+}
+
+
+   // Verify reset OTP
+async verifyResetOtp(dto: VerifyResetOtpDto) {
+  const email = dto.email.trim().toLowerCase();
+  const otp = dto.otp.trim();
+
+  // Find user
+  const user = await this.prisma.user.findUnique({
+    where: {
+      email,
+    },
+  });
+
+  // Don't reveal whether email exists
+  if (!user) {
+    throw new UnauthorizedException(
+      'Invalid or expired OTP',
+    );
+  }
+
+  // Find latest unused and non-expired OTP
+  const resetToken =
+    await this.prisma.passwordResetToken.findFirst({
+      where: {
+        userId: user.id,
+        used: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  if (!resetToken) {
+    throw new UnauthorizedException(
+      'Invalid or expired OTP',
+    );
+  }
+
+  // Maximum attempts
+  if (resetToken.attempts >= 5) {
+    await this.prisma.passwordResetToken.update({
+      where: {
+        id: resetToken.id,
+      },
+      data: {
+        used: true,
+      },
+    });
+
+    throw new UnauthorizedException(
+      'Too many incorrect OTP attempts. Please request a new OTP.',
+    );
+  }
+
+  // Hash received OTP using SHA-256
+  const otpHash = hashOtp(otp);
+
+  // Compare SHA-256 hashes
+  const isOtpValid =
+    otpHash === resetToken.tokenHash;
+
+  // Invalid OTP
+  if (!isOtpValid) {
+    await this.prisma.passwordResetToken.update({
+      where: {
+        id: resetToken.id,
+      },
+      data: {
+        attempts: {
+          increment: 1,
+        },
+      },
+    });
+
+    throw new UnauthorizedException(
+      'Invalid or expired OTP',
+    );
+  }
+
+  // OTP is valid
+  // Generate secure reset token
+  const resetTokenValue = randomBytes(32).toString('hex');
+
+  // Hash reset token using SHA-256
+  const resetTokenHash = createHash('sha256')
+    .update(resetTokenValue)
+    .digest('hex');
+
+  // Mark OTP as used
+  await this.prisma.passwordResetToken.update({
+    where: {
+      id: resetToken.id,
+    },
+    data: {
+      used: true,
+    },
+  });
+
+  // Store reset token
+  await this.prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: resetTokenHash,
+      expiresAt: new Date(
+        Date.now() + 10 * 60 * 1000,
+      ),
+      attempts: 0,
+      used: false,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'OTP verified successfully',
+    data: {
+      resetToken: resetTokenValue,
+    },
+  };
+}
+
+
+    // Reset Password
+
+// Reset Password
+async resetPassword(dto: ResetPassworddDto) {
+  const email = dto.email.trim().toLowerCase();
+  const resetToken = dto.resetToken.trim();
+  const newPassword = dto.newPassword;
+
+  // 1. Find user
+  const user = await this.prisma.user.findUnique({
+    where: {
+      email,
+    },
+  });
+
+  if (!user) {
+    throw new UnauthorizedException(
+      'Invalid or expired reset token',
+    );
+  }
+
+  // 2. Hash reset token received from frontend
+  const resetTokenHash = createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // 3. Find valid reset token
+  const passwordResetToken =
+    await this.prisma.passwordResetToken.findFirst({
+      where: {
+        userId: user.id,
+        tokenHash: resetTokenHash,
+        used: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  if (!passwordResetToken) {
+    throw new UnauthorizedException(
+      'Invalid or expired reset token',
+    );
+  }
+
+  // 4. Hash new password
+  const passwordHash = await bcrypt.hash(
+    newPassword,
+    12,
+  );
+
+  // 5. Update password and invalidate reset tokens
+  await this.prisma.$transaction([
+    // Update password
+    this.prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        passwordHash,
+        refreshTokenHash: null,
+      },
+    }),
+
+    // Mark current reset token as used
+    this.prisma.passwordResetToken.update({
+      where: {
+        id: passwordResetToken.id,
+      },
+      data: {
+        used: true,
+      },
+    }),
+
+    // Invalidate all other unused reset tokens
+    this.prisma.passwordResetToken.updateMany({
+      where: {
+        userId: user.id,
+        used: false,
+        id: {
+          not: passwordResetToken.id,
+        },
+      },
+      data: {
+        used: true,
+      },
+    }),
+  ]);
+
+  return {
+    success: true,
+    message:
+      'Password reset successfully. Please login with your new password.',
+  };
+}
 }
