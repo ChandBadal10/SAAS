@@ -1,6 +1,6 @@
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
   moduleFormat = "cjs"
 }
 
@@ -27,6 +27,7 @@ model User {
 
   verificationTokens VerificationToken[]
   otpRequests        OtpRequest[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 enum Role {
@@ -58,4 +59,19 @@ model OtpRequest {
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, used])
 }

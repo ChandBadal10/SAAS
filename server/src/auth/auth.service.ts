@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 
 
 @Injectable()
@@ -574,5 +575,65 @@ async refreshToken(refreshToken: string) {
             "Invalid or expired refresh token",
         );
     }
-}
+    }
+
+    //Forgot password
+    async forgotPassword(dto: ForgotPasswordDto) {
+        const email = dto.email.trim().toLocaleLowerCase();
+
+        const user = await this.prisma.user.findUnique({
+            where: {
+                email
+            }
+        });
+
+        //dont reveal whether the email exists
+        if(!user) {
+            return {
+                success: true,
+                message: "If the email is registered, a password reset OTP has been sent."
+            }
+        }
+
+        if(!user.isActive) {
+            throw new BadGatewayException("If the email is registered, a password reset OTP has been sent.")
+        }
+
+        //remove old unused reset tokens
+        await this.prisma.passwordResetToken.deleteMany({
+            where: {
+                userId: user.id,
+                used: false
+            }
+        });
+
+        //generate OTP
+        const otp = generateOtp();
+
+        //hash OTP
+        const tokenHash = hashOtp(otp);
+
+        //OTP expires in 10 min
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+        //store OTP
+        await this.prisma.passwordResetToken.create({
+            data: {
+                userId: user.id,
+                tokenHash,
+                expiresAt
+            }
+        });
+
+        await this.emailService.sendPasswordResetEmail(
+        user.email,
+        user.firstName,
+        otp,
+        );
+
+        return {
+        success: true,
+        message: 'If the email is registered, a password reset OTP has been sent.',
+        };
+    }
 }
