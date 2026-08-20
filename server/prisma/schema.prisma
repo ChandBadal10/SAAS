@@ -1,0 +1,61 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String @unique
+  passwordHash String
+
+  role Role @default(USER)
+
+  isEmailVerified Boolean @default(false)
+  isActive        Boolean @default(true)
+
+  refreshTokenHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  verificationTokens VerificationToken[]
+  otpRequests        OtpRequest[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model VerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, used])
+}
+
+model OtpRequest {
+  id        String   @id @default(uuid())
+  userId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+}
