@@ -7,6 +7,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -71,4 +72,9 @@ export class AuthController {
     async logout(@Body() logoutDto: LogoutDto) {
     return this.authService.logout(logoutDto.refreshToken);
 }
+
+    @Post('forgot-password')
+    async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+    }
 }

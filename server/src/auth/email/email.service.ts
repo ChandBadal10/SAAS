@@ -117,4 +117,43 @@ export class EmailService {
       );
     }
   }
+
+
+  async sendPasswordResetEmail(
+  email: string,
+  firstName: string,
+  otp: string,
+) {
+  await this.transporter.sendMail({
+    from: `"SaaS Platform" <${process.env.SENDER_EMAIL}>`,
+    to: email,
+    subject: 'Password Reset OTP',
+    html: `
+      <div style="font-family: Arial, sans-serif;">
+        <h2>Password Reset</h2>
+
+        <p>Hello ${firstName},</p>
+
+        <p>
+          We received a request to reset your password.
+        </p>
+
+        <p>Your password reset OTP is:</p>
+
+        <h1 style="letter-spacing: 8px;">
+          ${otp}
+        </h1>
+
+        <p>
+          This OTP will expire in 10 minutes.
+        </p>
+
+        <p>
+          If you did not request a password reset,
+          you can safely ignore this email.
+        </p>
+      </div>
+    `,
+  });
+}
 }

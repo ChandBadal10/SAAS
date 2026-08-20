@@ -32,3 +32,8 @@ export type VerificationToken = Prisma.VerificationTokenModel
  * 
  */
 export type OtpRequest = Prisma.OtpRequestModel
+/**
+ * Model PasswordResetToken
+ * 
+ */
+export type PasswordResetToken = Prisma.PasswordResetTokenModel
