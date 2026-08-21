@@ -9,8 +9,10 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyResetOtpDto } from './dto/verify-reset-otp.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResetPassworddDto } from './dto/reset-passwordd.dto';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
+import { Role } from 'src/generated/prisma/enums';
 
 @Controller('auth')
 export class AuthController {
@@ -91,5 +93,29 @@ export class AuthController {
         @Body() dto: ResetPassworddDto
     ) {
         return this.authService.resetPassword(dto);
+    }
+
+
+    // get user only
+    @Get("user-only")
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.USER)
+    async userOnly() {
+        return {
+            success: true,
+            message: "This endpoint is accessible by USER"
+        }
+    }
+
+
+    //Get admin only
+    @Get("admin-only")
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.ADMIN)
+    async adminOnly() {
+        return {
+            success: true,
+            message: "This endpoint is accessible by ADMIN"
+        }
     }
 }

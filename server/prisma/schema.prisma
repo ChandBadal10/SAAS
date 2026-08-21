@@ -1,6 +1,6 @@
 generator client {
-  provider = "prisma-client"
-  output = "../src/generated/prisma"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
   moduleFormat = "cjs"
 }
 
@@ -9,30 +9,20 @@ datasource db {
 }
 
 model User {
-  id           String @id @default(uuid())
-  firstName    String
-  lastName     String
-  email        String @unique
-  passwordHash String
-
-  role Role @default(USER)
-
-  isEmailVerified Boolean @default(false)
-  isActive        Boolean @default(true)
-
-  refreshTokenHash String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  verificationTokens VerificationToken[]
-  otpRequests        OtpRequest[]
+  id                  String               @id @default(uuid())
+  firstName           String
+  lastName            String
+  email               String               @unique
+  passwordHash        String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  isActive            Boolean              @default(true)
+  isEmailVerified     Boolean              @default(false)
+  role                Role                 @default(USER)
+  refreshTokenHash    String?
+  otpRequests         OtpRequest[]
   passwordResetTokens PasswordResetToken[]
-}
-
-enum Role {
-  USER
-  ADMIN
+  verificationTokens  VerificationToken[]
 }
 
 model VerificationToken {
@@ -43,8 +33,7 @@ model VerificationToken {
   attempts  Int      @default(0)
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([userId, used])
@@ -54,8 +43,7 @@ model OtpRequest {
   id        String   @id @default(uuid())
   userId    String
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -69,9 +57,13 @@ model PasswordResetToken {
   attempts  Int      @default(0)
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([userId, used])
+}
+
+enum Role {
+  USER
+  ADMIN
 }
