@@ -2,6 +2,7 @@ import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('users')
 export class UsersController {
@@ -38,4 +39,23 @@ export class UsersController {
             data: user
         }
     }
+
+
+    //change Password
+    @Patch('change-password')
+@UseGuards(JwtAuthGuard)
+async changePassword(
+  @Req() req: any,
+  @Body() changePasswordDto: ChangePasswordDto,
+) {
+  const result = await this.usersService.changePassword(
+    req.user.userId,
+    changePasswordDto,
+  );
+
+  return {
+    success: true,
+    message: result.message,
+  };
+}
 }
