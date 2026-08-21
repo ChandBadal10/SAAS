@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -47,30 +49,74 @@ export class UsersService {
 
 
   //update
-  async updateMe(userId: string, updateProfileDto: UpdateProfileDto) {
-    const user = await this.prisma.user.findUnique({
-      where: {
-        id: userId
-      },
-    });
+  async updateMe(
+  userId: string,
+  updateProfileDto: UpdateProfileDto,
+) {
+  const user = await this.prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+  });
 
-    if(!user) {
-      throw new NotFoundException("User not found")
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  const normalizedEmail =
+    updateProfileDto.email?.trim().toLowerCase();
+
+  // Check if email is being changed
+  if (
+    normalizedEmail &&
+    normalizedEmail !== user.email
+  ) {
+    const existingUser =
+      await this.prisma.user.findUnique({
+        where: {
+          email: normalizedEmail,
+        },
+      });
+
+    if (
+      existingUser &&
+      existingUser.id !== userId
+    ) {
+      throw new ConflictException(
+        'Email is already registered',
+      );
     }
+  }
 
-    const updateUser = await this.prisma.user.update({
+  const updatedUser =
+    await this.prisma.user.update({
       where: {
-        id: userId
+        id: userId,
       },
+
       data: {
         ...(updateProfileDto.firstName !== undefined && {
-          firstName: updateProfileDto.firstName.trim(),
+          firstName:
+            updateProfileDto.firstName.trim(),
         }),
 
         ...(updateProfileDto.lastName !== undefined && {
-          lastName: updateProfileDto.lastName.trim()
-        })
+          lastName:
+            updateProfileDto.lastName.trim(),
+        }),
+
+        ...(normalizedEmail &&
+          normalizedEmail !== user.email && {
+            email: normalizedEmail,
+
+            // New email must be verified
+            isEmailVerified: false,
+
+            // Existing refresh token becomes invalid
+            refreshTokenHash: null,
+          }),
       },
+
       select: {
         id: true,
         firstName: true,
@@ -80,17 +126,18 @@ export class UsersService {
         isActive: true,
         isEmailVerified: true,
         createdAt: true,
-        updatedAt: true
-      }
+        updatedAt: true,
+      },
     });
 
-    return updateUser
-  }
+  return updatedUser;
+}
 
 
   //Chnage Password
   async changePassword(userId: string, chnagePasswordDto: ChangePasswordDto) {
     const {currentPassword, newPassword} = chnagePasswordDto;
+
     //Find User
     const user = await this.prisma.user.findUnique({
       where: {
@@ -131,4 +178,103 @@ export class UsersService {
     }
 
   }
+
+  //get all users
+  async getAllUsers() {
+  const users = await this.prisma.user.findMany({
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+      isActive: true,
+      isEmailVerified: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    });
+
+    return {
+    message: 'Users fetched successfully',
+    users,
+    };
+  }
+
+
+  // get user by id
+  async getUserById(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        isActive: true,
+        isEmailVerified: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if(!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    return {
+      message: "User fetched successfully",
+      user
+    }
+  }
+
+
+  //update user status
+  async updateUserStatus(userId: string, isActive: boolean) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId
+      },
+    });
+
+    if(!user) {
+      throw new NotFoundException("User not found")
+    }
+
+    //prevent admin from accidentally disabling themselvs
+    if(user.role === "ADMIN") {
+      throw new BadRequestException("Admin account status cannot be changed")
+    }
+
+    const updateUser = await this.prisma.user.update({
+      where: {
+        id: userId
+      },
+      data: {
+        isActive,
+        ...(isActive == false && {
+          refreshTokenHash: null
+        }),
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        isActive: true,
+        isEmailVerified: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+    return updateUser;
+  }
+
 }
