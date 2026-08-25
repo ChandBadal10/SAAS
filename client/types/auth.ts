@@ -1,15 +1,14 @@
 export type Role = "USER" | "ADMIN";
 
 export interface User {
-  id: string;
+  id?: string;
   firstName: string;
   lastName: string;
   email: string;
   role: Role;
-  isActive: boolean;
   isEmailVerified: boolean;
+  isActive: boolean;
   createdAt?: string;
-  updatedAt?: string;
 }
 
 export interface LoginResponse {
@@ -20,4 +19,10 @@ export interface LoginResponse {
     refreshToken: string;
     user: User;
   };
+}
+
+export interface ApiEnvelope<T = unknown> {
+  success: boolean;
+  message: string;
+  data?: T;
 }
