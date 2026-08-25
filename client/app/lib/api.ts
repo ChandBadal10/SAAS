@@ -15,14 +15,35 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Requests where a 401 means "wrong credentials / invalid code",
+// not "your access token expired" — never trigger refresh-and-retry
+// or a forced redirect for these.
+const AUTH_ENDPOINTS_TO_SKIP = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/refresh",
+  "/auth/verify-email",
+  "/auth/verify-reset-otp",
+  "/auth/reset-password",
+  "/auth/forgot-password",
+  "/auth/resend-verification",
+];
+
 let isRefreshing = false;
 let queue: (() => void)[] = [];
 
-// Auto-refresh on 401, matching /api/auth/refresh
 api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const url = originalRequest?.url || "";
+    const isAuthEndpoint = AUTH_ENDPOINTS_TO_SKIP.some((path) => url.includes(path));
+
+    // Let login/register/otp/etc. 401s and 400s bubble straight to the
+    // calling component's catch block — no refresh attempt, no redirect.
+    if (isAuthEndpoint) {
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
